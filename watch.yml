@@ -1,0 +1,63 @@
+name: watch-repo
+
+# Strategy: a new watcher job starts every hour, and each job polls for ~5h50m
+# (just under the 6h job ceiling). That means ~6 overlapping jobs at any moment.
+# GitHub's scheduled triggers are frequently delayed or silently dropped under
+# load — the overlap is what turns an unreliable cron into continuous coverage.
+on:
+  schedule:
+    - cron: '7 * * * *'      # hourly, offset off the :00 stampede
+  workflow_dispatch:          # lets you start one by hand immediately
+
+permissions:
+  contents: read
+  issues: write               # so a hit can open an issue -> GitHub emails you
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355      # 5h55m; loop below exits at 5h50m
+    # No concurrency group on purpose — overlapping runs ARE the redundancy.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Watch for the repo going public
+        id: watch
+        env:
+          TARGET_REPO: ${{ vars.TARGET_REPO || 'mrhakash/ghost-ai-writer-v2' }}
+          # Optional: add a PAT as secret GH_PAT to raise API limits during capture.
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          python3 -u ghost_watch.py \
+            --repo "$TARGET_REPO" \
+            --interval 3 \
+            --max-runtime 21000 \
+            --out "$GITHUB_WORKSPACE/capture"
+
+      - name: Upload capture
+        if: steps.watch.outputs.captured == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: capture-${{ github.run_id }}
+          path: capture/
+          retention-days: 90
+
+      - name: Open an issue so you get emailed
+        if: steps.watch.outputs.captured == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPO: ${{ vars.TARGET_REPO || 'mrhakash/ghost-ai-writer-v2' }}
+        run: |
+          gh issue create \
+            --repo "${{ github.repository }}" \
+            --title "CAPTURED: $TARGET_REPO went public" \
+            --body "Captured at $(date -u). Download the \`capture-${{ github.run_id }}\` artifact from the run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Always keep the log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: log-${{ github.run_id }}
+          path: capture/watch.log
+          retention-days: 7
+          if-no-files-found: ignore
