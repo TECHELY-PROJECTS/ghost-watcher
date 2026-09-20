@@ -30,7 +30,7 @@ jobs:
         run: |
           python3 -u ghost_watch.py \
             --repo "$TARGET_REPO" \
-            --interval 3 \
+            --interval 2 \
             --max-runtime 21000 \
             --out "$GITHUB_WORKSPACE/capture"
 
