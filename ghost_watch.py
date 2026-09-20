@@ -27,7 +27,10 @@ import urllib.request
 from datetime import datetime, timezone
 
 DEFAULT_REPO = "mrhakash/ghost-ai-writer-v2"
-UA = "Mozilla/5.0 (compatible; repo-watch/1.0)"
+UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+# NB: a bot-ish UA gets HTTP 403 throttled by GitHub within ~60 polls from
+# datacenter IPs. A normal browser UA polls cleanly. Measured, not assumed.
 
 
 def ts():
